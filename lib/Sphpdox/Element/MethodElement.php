@@ -4,6 +4,7 @@ namespace Sphpdox\Element;
 
 use Symfony\Component\Console\Output\OutputInterface;
 use TokenReflection\IReflectionMethod;
+use TokenReflection\ReflectionParameter;
 
 /**
  * Method element
@@ -21,6 +22,70 @@ class MethodElement extends Element
     }
 
     /**
+     * @see \Sphpdox\Element\Element::__toString()
+     */
+    public function __toString()
+    {
+        try {
+            $arguments = $this->getArguments();
+        } catch (\Exception $e) {
+            $arguments = '';
+        }
+
+        $string = sprintf(".. php:method:: %s(%s)\n\n", $this->reflection->getName(), $this->getArguments());
+
+        $parser = $this->getParser();
+
+        if ($description = $parser->getDescription()) {
+            $string .= $this->indent($description."\n\n", 4, true);
+        }
+
+        $return = $this->getReturnValue();
+
+        $annotations = array_merge(
+            $this->getParameters(),
+            $return ? array($return) : array()
+        );
+
+        if ($annotations) {
+            $string .= $this->indent(implode("\n", $annotations), 4)."\n";
+        }
+
+        return trim($string);
+    }
+
+    /**
+     * Gets the formal signature/declaration argument list ReST output
+     *
+     * @return string
+     */
+    protected function getArguments()
+    {
+        $strings = array();
+
+        foreach ($this->getParameterInfo() as $name => $parameter) {
+            $string = '';
+
+            if ($parameter['hint_type']) {
+                $string .= $parameter['hint_type'].' ';
+            }
+
+            $string .= '$'.$name;
+
+            if (isset($parameter['default'])) {
+                if ($parameter['default'] == '~~NOT RESOLVED~~') {
+                    $parameter['default'] = '';
+                }
+                $string .= ' = '.$parameter['default'];
+            }
+
+            $strings[] = $string;
+        }
+
+        return implode(', ', $strings);
+    }
+
+    /**
      * Gets an array of simplified information about the parameters of this
      * method
      *
@@ -32,11 +97,12 @@ class MethodElement extends Element
 
         $parameters = $this->reflection->getParameters();
         foreach ($parameters as $parameter) {
+            /** @var ReflectionParameter $parameter */
             $params[$parameter->getName()] = array(
-                'name'      => $parameter->getName(),
+                'name' => $parameter->getName(),
                 'hint_type' => $parameter->getOriginalTypeHint(),
-                'type'      => $parameter->getOriginalTypeHint(),
-                'comment'   => null
+                'type' => $parameter->getOriginalTypeHint(),
+                'comment' => null,
             );
 
             if ($parameter->isDefaultValueAvailable()) {
@@ -48,10 +114,14 @@ class MethodElement extends Element
             }
         }
 
-        $annotations = array_filter($this->getParser()->getAnnotations(), function ($v) {
-            $e = explode(' ', $v);
-            return isset($e[0]) && $e[0] == '@param';
-        });
+        $annotations = array_filter(
+            $this->getParser()->getAnnotations(),
+            function ($v) {
+                $e = explode(' ', $v);
+
+                return isset($e[0]) && $e[0] == '@param';
+            }
+        );
         foreach ($annotations as $parameter) {
             $parts = explode(' ', $parameter);
 
@@ -77,74 +147,22 @@ class MethodElement extends Element
     }
 
     /**
-     * Gets the formal signature/declaration argument list ReST output
-     *
-     * @return string
-     */
-    protected function getArguments()
-    {
-        $strings = array();
-
-        foreach ($this->getParameterInfo() as $name => $parameter) {
-            $string = '';
-
-            if ($parameter['hint_type']) {
-                $string .= $parameter['hint_type'] . ' ';
-            }
-
-            $string .= '$' . $name;
-
-            if (isset($parameter['default'])) {
-                if ($parameter['default'] == '~~NOT RESOLVED~~') {
-                    $parameter['default'] = '';
-                }
-                $string .= ' = ' . $parameter['default'];
-            }
-
-            $strings[] = $string;
-        }
-
-        return implode(', ', $strings);
-    }
-
-    /**
-     * Gets an array of parameter information, in ReST format
-     *
-     * @return array
-     */
-    protected function getParameters()
-    {
-        $strings = array();
-
-        foreach ($this->getParameterInfo() as $name => $parameter) {
-            if ($parameter['type']) {
-                $strings[] = ':type $' . $name . ': ' . $parameter['type'];
-            }
-
-            $string = ':param $' . $name . ':';
-
-            if (isset($parameter['comment']) && $parameter['comment']) {
-                $string .= ' ' . $parameter['comment'];
-            }
-
-             $strings[] = $string;
-        }
-
-        return $strings;
-    }
-
-    /**
      * Gets the return value ReST notation
      *
      * @return boolean|string
      */
     protected function getReturnValue()
     {
-        $annotations = array_filter($this->getParser()->getAnnotations(), function ($v) {
-            $e = explode(' ', $v);
-            return isset($e[0]) && $e[0] == '@return';
-        });
+        $annotations = array_filter(
+            $this->getParser()->getAnnotations(),
+            function ($v) {
+                $e = explode(' ', $v);
+
+                return isset($e[0]) && $e[0] == '@return';
+            }
+        );
         foreach ($annotations as $parameter) {
+            $parameter = preg_replace('/\s+/', ' ', $parameter);
             $parts = explode(' ', $parameter);
 
             if (count($parts) < 2) {
@@ -161,7 +179,7 @@ class MethodElement extends Element
             return sprintf(
                 ':returns: %s%s',
                 $type ?: 'unknown',
-                $comment ? ' ' . $comment : ''
+                $comment ? ' '.$comment : ''
             );
         }
 
@@ -169,35 +187,28 @@ class MethodElement extends Element
     }
 
     /**
-     * @see \Sphpdox\Element\Element::__toString()
+     * Gets an array of parameter information, in ReST format
+     *
+     * @return array
      */
-    public function __toString()
+    protected function getParameters()
     {
-        try {
-            $arguments = $this->getArguments();
-        } catch (\Exception $e) {
-            $arguments = '';
+        $strings = array();
+
+        foreach ($this->getParameterInfo() as $name => $parameter) {
+            if ($parameter['type']) {
+                $strings[] = ':type $'.$name.': '.$parameter['type'];
+            }
+
+            $string = ':param $'.$name.':';
+
+            if (isset($parameter['comment']) && $parameter['comment']) {
+                $string .= ' '.$parameter['comment'];
+            }
+
+            $strings[] = $string;
         }
 
-        $string = sprintf(".. php:method:: %s(%s)\n\n", $this->reflection->getName(), $this->getArguments());
-
-        $parser = $this->getParser();
-
-        if ($description = $parser->getDescription()) {
-            $string .= $this->indent($description . "\n\n", 4, true);
-        }
-
-        $return = $this->getReturnValue();
-
-        $annotations = array_merge(
-            $this->getParameters(),
-            $return ? array($return) : array()
-        );
-
-        if ($annotations) {
-            $string .= $this->indent(implode("\n", $annotations), 4) . "\n";
-        }
-
-        return trim($string);
+        return $strings;
     }
 }

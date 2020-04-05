@@ -27,9 +27,10 @@ class PropertyElement extends Element
             return '';
         }
 
-        $string = sprintf(".. php:attr:: %s\n\n", $this->reflection->getName());
-        $string .= $this->getModifierLine();
+        $method = $this->reflection->getName();
 
+        $string = sprintf(".. php:attr:: %s\n\n", $method);
+        $string .= $this->getModifierLine();
 
         $string .= $this->indent($parser->getDescription(), 4, true);
 
@@ -38,24 +39,21 @@ class PropertyElement extends Element
 
     protected function getModifierLine()
     {
-        $line = '';
-        $line .= $this->getVisibilityModifier() . ' ';
-        $line .= $this->getTypeModifier() . ' ';
-        $line = trim($line);
+        $line = [];
+        if ($this->getTypeModifier()) {
+            $line[] = sprintf("    :type: %s\n\n", $this->getTypeModifier());
+        }
+        if ($this->getVisibilityModifier()) {
+            $line[] = sprintf("    :scope: %s\n\n", $this->getVisibilityModifier());
+        }
 
         if ($line) {
-            $line = $this->indent($line, 4, true);
-            $line .= "\n\n";
+            $line = implode("", $line);
+        } else {
+            $line = '';
         }
 
         return $line;
-    }
-
-    protected function getVisibilityModifier()
-    {
-        if ($this->reflection->isProtected()) {
-             return 'protected';
-        }
     }
 
     protected function getTypeModifier()
@@ -68,6 +66,13 @@ class PropertyElement extends Element
             if ($parts[1]) {
                 return $parts[1];
             }
+        }
+    }
+
+    protected function getVisibilityModifier()
+    {
+        if ($this->reflection->isProtected()) {
+            return 'protected';
         }
     }
 }
